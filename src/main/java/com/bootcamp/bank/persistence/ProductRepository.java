@@ -2,6 +2,7 @@ package com.bootcamp.bank.persistence;
 
 
 import com.bootcamp.bank.domain.dto.account.AccountOpenRequest;
+import com.bootcamp.bank.domain.dto.purchase.PurchaseConsumptionCreditRequest;
 import com.bootcamp.bank.persistence.crud.IProductRepository;
 import com.bootcamp.bank.persistence.entity.Product;
 import com.bootcamp.bank.util.ConstanteGenerales;
@@ -11,9 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-
-import java.util.List;
-import java.util.Optional;
 
 @Service
 public class ProductRepository {
@@ -67,11 +65,26 @@ public class ProductRepository {
     public Mono<Product> getByNumberCard(String numberCard){
         return  dao.findByNumberCard(numberCard);
     }
-    public Mono<Product> PayCredit(Product product){
-            return   dao.save(product);
+    public Mono<Product> PayCredit(Product request){
+
+        Mono<Product>  productoActua=   dao.findByNumberCard(request.getNumberCard())
+                .defaultIfEmpty( new Product())
+                .map(p -> {
+            p.setAmountPay(request.getAmountPay());
+            p.setPayments(request.getPayments());
+            return p;
+        }).flatMap(dao::save);
+        return productoActua;
+
+
     }
-    public Mono<Product> purchaseConsumptionCredit(Product product){
-        return dao.save(product);
+    public Mono<Product> purchaseConsumptionCredit(PurchaseConsumptionCreditRequest request){
+        return dao.findByNumberCard(request.getNumberCard())
+                .defaultIfEmpty( new Product())
+                .map(p -> {
+                    p.setAmountPay(request.getAmount());
+                   return p;
+                }).flatMap(dao::save);
     }
 
     public Flux<Product> getByNumberAccount(String numberAccount) {

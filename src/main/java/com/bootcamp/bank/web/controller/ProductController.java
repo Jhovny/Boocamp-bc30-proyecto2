@@ -3,10 +3,12 @@ package com.bootcamp.bank.web.controller;
 
 import com.bootcamp.bank.domain.dto.account.AccountOpenRequest;
 import com.bootcamp.bank.domain.dto.account.AccountOpenResponse;
+import com.bootcamp.bank.domain.dto.client.ClientApiResponse;
 import com.bootcamp.bank.domain.dto.purchase.PayCreditRequest;
 import com.bootcamp.bank.domain.dto.purchase.PayCreditResponse;
 import com.bootcamp.bank.domain.dto.purchase.PurchaseConsumptionCreditRequest;
 import com.bootcamp.bank.domain.dto.purchase.PurchaseConsumptionCreditResponse;
+import com.bootcamp.bank.domain.service.ClientApiService;
 import com.bootcamp.bank.persistence.ProductRepository;
 import com.bootcamp.bank.persistence.entity.Operation;
 import com.bootcamp.bank.persistence.entity.Product;
@@ -31,6 +33,9 @@ public class ProductController {
     @Autowired
     private ProductRepository productRepository;
 
+    @Autowired
+    private ClientApiService clientApiService;
+
     @GetMapping()
     public   Flux<Product>  getAll(){
 
@@ -41,9 +46,12 @@ public class ProductController {
     }
 
     @PostMapping("/account-open")
-    public Flux<ResponseEntity<AccountOpenResponse>> payCredit(@RequestBody AccountOpenRequest request) {
+    public Flux<ResponseEntity<AccountOpenResponse>> accountOpen(@RequestBody AccountOpenRequest request) {
 
+        //Consultar info de API client
+        ClientApiResponse clientApiResponse=clientApiService.getClient(request.getClient().getIdClient());
         AccountOpenResponse response = new AccountOpenResponse();
+
 
         Flux<Product> productPasivos = productRepository.getProductPasivo(request.getClient().getIdClient());
 
@@ -71,19 +79,15 @@ public class ProductController {
 
             List<Product> produList= null;
 
-
-            Flux<Product> responsess= productPasivos.filter(p ->
-                             p.getTypeAccount().equals(ConstanteGenerales.TYPE_PRODUCTO_CUENTA_CUENTACORRIENTE)
-                                    || p.getTypeAccount().equals(ConstanteGenerales.TYPE_PRODUCTO_CUENTA_PAZLOFIJO)
-
-                    );
-
-            try{
-                produList=responsess.collectList().block();
+            try
+            {
+                produList= productPasivos.filter(p ->
+                        p.getTypeAccount().equals(ConstanteGenerales.TYPE_PRODUCTO_CUENTA_CUENTACORRIENTE)
+                                || p.getTypeAccount().equals(ConstanteGenerales.TYPE_PRODUCTO_CUENTA_PAZLOFIJO)
+                ).collectList().block();
 
             }catch (Exception err){
                 produList= new ArrayList<>();
-
             }
 
 
@@ -100,39 +104,35 @@ public class ProductController {
                 response.setCodigo(ConstanteGenerales.RESPUESTA_API_ALERTA);
             }
 
-
-
             return Flux.just(new ResponseEntity<>(response, HttpStatus.OK));
         }
 
 
     }
 
-
     @PostMapping("/pay-credit")
     public PayCreditResponse payCredit(@RequestBody PayCreditRequest request) {
 
         PayCreditResponse response = new PayCreditResponse();
-        Optional<Product> producSeach = productRepository.getByNumberCard(request.getProduct()
-                        .getNumberCard())
-                .blockOptional();
 
-        if (producSeach.isEmpty()) {
+        if (productRepository.getByNumberCard(request.getProduct()
+                        .getNumberCard())
+                .blockOptional().isEmpty()) {
             response.setMensaje("No existe el numero de tarjeta");
             response.setCodigo(ConstanteGenerales.RESPUESTA_API_ALERTA);
-
             return response;
         }
 
-        Product productEn = productRepository.getByNumberCard(request.getProduct()
-                .getNumberCard()).block();
 
-        productEn.setPayments(request.getProduct().getPayments());
-        productEn.setAmountPay(request.getProduct().getAmountPay());
-        Mono<Product> productSave = productRepository.PayCredit(productEn);
+        if(productRepository.PayCredit(request.getProduct()).blockOptional().isPresent()){
+            response.setMensaje("Se pago la cuenta satisfactoriamente");
+            response.setCodigo(ConstanteGenerales.RESPUESTA_API_OK);
+        }else{
+            response.setMensaje("ocurrio un error inesperado");
+            response.setCodigo(ConstanteGenerales.RESPUESTA_API_ERROR);
+        }
 
-        response.setMensaje("Se pago la cuenta satisfactoriamente");
-        response.setCodigo(ConstanteGenerales.RESPUESTA_API_OK);
+
 
         return response;
 
@@ -142,24 +142,21 @@ public class ProductController {
     public PurchaseConsumptionCreditResponse payCredit(@RequestBody PurchaseConsumptionCreditRequest request) {
 
         PurchaseConsumptionCreditResponse response = new PurchaseConsumptionCreditResponse();
-        Optional<Product> producSeach = productRepository.getByNumberCard(request.getNumberCard())
-                .blockOptional();
 
-        if (producSeach.isEmpty()) {
+        if (productRepository.getByNumberCard(request.getNumberCard())
+                .blockOptional().isEmpty()) {
             response.setMensaje("No existe el numero de tarjeta");
             response.setCodigo(ConstanteGenerales.RESPUESTA_API_ALERTA);
             return response;
         }
 
-        Product productEn = productRepository.getByNumberCard(request.getNumberCard()
-        ).block();
+        if(productRepository.purchaseConsumptionCredit(request).blockOptional().isPresent()){
+            response.setMensaje("Se cargo el consumo a su tarjeta");
+        }else{
+            response.setMensaje("ocurrio un error inesperado");
+            response.setCodigo(ConstanteGenerales.RESPUESTA_API_ERROR);
+        }
 
-        productEn.setNumberCard(request.getNumberCard());
-        productEn.setAvailableBalance(productEn.getAvailableBalance() - request.getAmount());
-        Mono<Product> productSave = productRepository.PayCredit(productEn);
-
-        response.setMensaje("Se cargo el consumo a su tarjeta");
-        response.setCodigo(ConstanteGenerales.RESPUESTA_API_OK);
 
         return response;
 
@@ -198,6 +195,10 @@ public class ProductController {
 
     @GetMapping("/checkBalance/{id}")
     public float CheckBalance(@PathVariable String id){
+
+
+
+
         Flux<Product> productos = productRepository.getByNumberAccount(id);
         Product producto = productos.blockFirst();
         return producto.getBalance();
@@ -208,6 +209,15 @@ public class ProductController {
         Flux<Product> productos = productRepository.getByNumberAccount(id);
         Product producto = productos.blockFirst();
         return producto.getBankOperations();
+    }
+
+
+    @GetMapping("/getByNumberCard/{id}")
+    public Mono<Product> getProductNumberCard(@PathVariable String id){
+
+        return productRepository.getByNumberCard(id);
+
+
     }
 
 }
