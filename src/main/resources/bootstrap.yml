@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: bank
+  cloud:
+    config:
+      uri: http://localhost:8084
+      username: root
+      password: s3cr@t3d*+
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/bank
+  thymeleaf:
+    reactive:
+      max-chunk-size: 1024
+
